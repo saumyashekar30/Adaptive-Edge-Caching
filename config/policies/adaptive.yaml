@@ -1,0 +1,7 @@
+name: "adaptive"
+description: "Adaptive Cache Replacement Policy based on recency, frequency, and latency cost"
+params:
+  recency_weight: 0.4
+  frequency_weight: 0.4
+  latency_weight: 0.2
+  adaptation_window_seconds: 120

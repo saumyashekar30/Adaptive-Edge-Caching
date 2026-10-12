@@ -1,0 +1,5 @@
+name: "ttl"
+description: "Time-to-Live Cache Eviction Policy"
+params:
+  default_ttl_seconds: 300
+  cleanup_interval_seconds: 30

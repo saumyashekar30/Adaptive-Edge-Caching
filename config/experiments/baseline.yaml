@@ -1,0 +1,16 @@
+experiment_name: "baseline_evaluation"
+duration_seconds: 300
+workload:
+  total_requests: 10000
+  concurrency: 20
+  key_distribution: "zipf"
+  zipf_alpha: 0.8
+  unique_items: 2000
+nodes:
+  - "node-1"
+  - "node-2"
+  - "node-3"
+policies_to_compare:
+  - "lru"
+  - "lfu"
+  - "adaptive"

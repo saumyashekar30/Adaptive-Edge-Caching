@@ -1,0 +1,4 @@
+name: "lru"
+description: "Least Recently Used Cache Eviction Policy"
+params:
+  track_access_time: true

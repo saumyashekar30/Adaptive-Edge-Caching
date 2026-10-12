@@ -1,0 +1,5 @@
+name: "lfu"
+description: "Least Frequently Used Cache Eviction Policy"
+params:
+  decay_interval_sec: 60
+  decay_factor: 0.9
