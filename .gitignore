@@ -1,10 +1,13 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
+
+# Distribution / packaging
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -21,26 +24,17 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environments
-.venv/
+# Virtual environments
+.env
+.venv
+env/
 venv/
 ENV/
 
-# Environment Variables
-.env
-
-# IDEs
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Testing & Coverage
+# Testing & logs
 .pytest_cache/
 .coverage
 htmlcov/
-
-# Logs & Simulation Outputs
 *.log
 simulation/results/*
 !simulation/results/.gitkeep

@@ -1,1 +1,1 @@
-"""Test suite for Adaptive Edge Caching."""
+"""Tests package for adaptive edge caching."""

@@ -1,1 +1,1 @@
-"""Edge node execution and peer clustering."""
+"""Edge node layer package."""

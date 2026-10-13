@@ -1,1 +1,5 @@
-"""Cache consistency and invalidation protocols."""
+"""Consistency and invalidation package."""
+
+from .invalidation import ConsistencyManager, VersionMetadata
+
+__all__ = ["ConsistencyManager", "VersionMetadata"]
