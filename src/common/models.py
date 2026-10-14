@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -222,4 +223,186 @@ class RecoveryRecord:
             "recovery_time_seconds": round(self.recovery_time_seconds, 3),
             "consecutive_failures": self.consecutive_failures,
         }
+
+
+# ---------------------------------------------------------------------------
+# Edge node configuration, identity, and experiment/workload records.
+# (Riddhi: Distributed Edge Runtime / Experiment Automation)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class NodeConfig:
+    """Validated configuration/identity for one independently runnable edge node.
+
+    Loaded from a `config/nodes/*.yaml` file by `src.common.config.load_node_config`.
+    """
+    node_id: str
+    host: str = "0.0.0.0"
+    port: int = 8080
+    capacity_mb: float = 50.0
+    max_object_size_mb: float = 5.0
+    policy: str = "lru"  # "lru" | "lfu" | "ttl" | "adaptive"
+    origin_url: str = "http://127.0.0.1:8000"
+    peers: List[str] = field(default_factory=list)
+    controller_url: Optional[str] = None
+    telemetry_interval_seconds: float = 5.0
+    default_ttl_seconds: Optional[float] = None
+    # Address other nodes/the controller should use to reach this node, when
+    # it differs from the bind host (e.g. binding 0.0.0.0 inside a Docker
+    # container but reachable as the container's service name "node1").
+    advertise_host: Optional[str] = None
+
+    @property
+    def capacity_bytes(self) -> int:
+        return int(self.capacity_mb * 1024 * 1024)
+
+    @property
+    def max_object_size_bytes(self) -> int:
+        return int(self.max_object_size_mb * 1024 * 1024)
+
+    @property
+    def base_url(self) -> str:
+        if self.advertise_host:
+            host = self.advertise_host
+        elif self.host in ("0.0.0.0", "::"):
+            host = "127.0.0.1"
+        else:
+            host = self.host
+        return f"http://{host}:{self.port}"
+
+
+class RequestOutcome(str, Enum):
+    """Distinct terminal outcomes of a single client request, used by workload
+    generation, experiment recording, and analysis. Never collapse PEER_HIT
+    into LOCAL_HIT -- the API contract (docs/api_contracts.md Sec.1/5) and the
+    proxy's own `X-Cache` header keep them distinct."""
+    LOCAL_HIT = "local_hit"
+    PEER_HIT = "peer_hit"
+    ORIGIN_FETCH = "origin_fetch"
+    BYPASS = "bypass"
+    ERROR = "error"
+    TIMEOUT = "timeout"
+
+    @classmethod
+    def from_headers(cls, status_code: int, headers: Dict[str, str]) -> "RequestOutcome":
+        """Classify a completed HTTP response using the proxy's own response headers."""
+        if status_code >= 500 or status_code == 0:
+            return cls.ERROR
+        x_cache = (headers.get("X-Cache") or headers.get("x-cache") or "").upper()
+        if x_cache == "HIT":
+            return cls.LOCAL_HIT
+        if x_cache == "PEER_HIT":
+            return cls.PEER_HIT
+        if x_cache == "BYPASS":
+            return cls.BYPASS
+        if x_cache == "MISS":
+            return cls.ORIGIN_FETCH
+        if status_code >= 400:
+            return cls.ERROR
+        return cls.ORIGIN_FETCH
+
+
+@dataclass
+class RequestRecord:
+    """Raw, per-request measurement produced by the workload generator and
+    consumed by the experiment runner / analyzer. One record per attempted
+    HTTP request -- failed and timed-out requests are kept, not discarded."""
+    experiment_id: str
+    request_id: int
+    timestamp: float
+    target_url: str
+    resource_id: str
+    status_code: int
+    outcome: str  # RequestOutcome value
+    latency_ms: float
+    node_id: str = ""
+    error: Optional[str] = None
+    is_warmup: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "experiment_id": self.experiment_id,
+            "request_id": self.request_id,
+            "timestamp": self.timestamp,
+            "target_url": self.target_url,
+            "resource_id": self.resource_id,
+            "status_code": self.status_code,
+            "outcome": self.outcome,
+            "latency_ms": round(self.latency_ms, 4),
+            "node_id": self.node_id,
+            "error": self.error,
+            "is_warmup": self.is_warmup,
+        }
+
+
+@dataclass
+class WorkloadConfig:
+    """Configuration for a single reproducible request workload."""
+    distribution: str = "zipf"  # "zipf" | "uniform" | "bursty"
+    num_requests: int = 500
+    unique_objects: int = 100
+    zipf_alpha: float = 1.1
+    concurrency: int = 4
+    request_rate_per_sec: Optional[float] = None
+    burst_size: int = 20
+    burst_idle_seconds: float = 1.0
+    seed: int = 42
+    warmup_requests: int = 0
+    request_timeout_seconds: float = 5.0
+    object_size_mean_bytes: int = 4096
+    object_size_std_bytes: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(self.__dict__)
+
+
+@dataclass
+class ExperimentConfig:
+    """Top-level reproducible experiment definition, loaded from
+    `config/experiments/*.yaml` by `src.common.config.load_experiment_config`."""
+    experiment_name: str
+    duration_seconds: float = 60.0
+    num_clients: int = 10
+    workload: WorkloadConfig = field(default_factory=WorkloadConfig)
+    cache_capacity_mb: float = 2.0
+    cache_max_object_size_kb: float = 64.0
+    policies: List[str] = field(default_factory=lambda: ["lru"])
+    origin_base_latency_ms: float = 60.0
+    origin_jitter_ms: float = 10.0
+    repetitions: int = 1
+    mode: str = "self_managed"  # "self_managed" | "external"
+    target_url: Optional[str] = None  # required when mode == "external"
+    raw: Dict[str, Any] = field(default_factory=dict)  # original parsed YAML, for provenance
+
+
+@dataclass
+class ExperimentSummary:
+    """Machine-readable aggregate summary for one (experiment, policy, repetition) run."""
+    experiment_id: str
+    experiment_name: str
+    policy: str
+    repetition: int
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    timed_out_requests: int
+    local_hits: int
+    peer_hits: int
+    origin_fetches: int
+    bypasses: int
+    cache_hit_ratio: Optional[float]
+    mean_latency_ms: Optional[float]
+    median_latency_ms: Optional[float]
+    p95_latency_ms: Optional[float]
+    p99_latency_ms: Optional[float]
+    throughput_rps: Optional[float]
+    error_rate: Optional[float]
+    timeout_rate: Optional[float]
+    duration_seconds: float
+    started_at: float
+    finished_at: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(self.__dict__)
 

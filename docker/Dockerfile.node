@@ -10,4 +10,9 @@ COPY . .
 ENV PYTHONPATH=/app
 EXPOSE 8080
 
-CMD ["python", "-m", "src.proxy.server", "--host", "0.0.0.0", "--port", "8080"]
+# Runs the full EdgeNode runtime (proxy + cache + peers + telemetry), not the
+# bare proxy module -- configuration comes from env vars (NODE_ID, NODE_HOST,
+# NODE_PORT, ORIGIN_URL, POLICY, CAPACITY_MB, MAX_OBJECT_SIZE_MB, PEERS,
+# CONTROLLER_URL, TELEMETRY_INTERVAL_SECONDS) set per-service in
+# docker-compose.yml, optionally layered on top of a mounted --config file.
+CMD ["python", "-m", "src.edge.node"]
