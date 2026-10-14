@@ -24,6 +24,14 @@ except ImportError:
     from src.proxy.origin_client import OriginClient  # type: ignore
     from src.proxy.request_handler import ProxyRequestHandler  # type: ignore
 
+try:
+    from ..edge.peer_client import PeerClient
+except ImportError:
+    try:
+        from src.edge.peer_client import PeerClient  # type: ignore
+    except ImportError:
+        PeerClient = None  # type: ignore
+
 logger = logging.getLogger("proxy_server")
 
 
@@ -48,6 +56,39 @@ class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
         if self.path == "/cache/stats":
             self._send_json(HTTPStatus.OK, self.server.cache_store.stats())
+            return
+
+        # Peer-to-peer cache fetch endpoint (Shared Seam: api_contracts.md Section 5)
+        if self.path.startswith("/peer-cache/"):
+            resource_id = self.path[len("/peer-cache/"):].lstrip("/")
+            candidates = [f"/data/{resource_id}", f"/{resource_id}", resource_id]
+            entry = None
+            for cand in candidates:
+                lookup_res = self.server.cache_store.get(cand)
+                if lookup_res.status == "HIT" and lookup_res.entry is not None:
+                    entry = lookup_res.entry
+                    break
+
+            if entry is not None:
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", entry.content_type)
+                self.send_header("Content-Length", str(entry.size_bytes))
+                self.send_header("X-Peer-Cache", "HIT")
+                self.send_header("X-Peer-Node-Id", self.server.node_id)
+                self.send_header("X-Resource-Version", entry.version)
+                if entry.etag:
+                    self.send_header("ETag", entry.etag)
+                self.end_headers()
+                self.wfile.write(entry.value)
+            else:
+                self.send_response(HTTPStatus.NOT_FOUND)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("X-Peer-Cache", "MISS")
+                self.send_header("X-Peer-Node-Id", self.server.node_id)
+                err_payload = json.dumps({"error": "Resource not found in peer cache", "resource_id": resource_id}).encode("utf-8")
+                self.send_header("Content-Length", str(len(err_payload)))
+                self.end_headers()
+                self.wfile.write(err_payload)
             return
 
         # 2. Regular proxy request flow
@@ -118,17 +159,20 @@ class ProxyHTTPServer(ThreadingHTTPServer):
         origin_client: OriginClient,
         node_id: str = "edge-node-1",
         consistency_manager: Optional[Any] = None,
+        peer_client: Optional[Any] = None,
     ):
         super().__init__(server_address, ProxyHTTPRequestHandler)
         self.cache_store = cache_store
         self.origin_client = origin_client
         self.node_id = node_id
         self.consistency_manager = consistency_manager
+        self.peer_client = peer_client
         self.handler = ProxyRequestHandler(
             cache_store=cache_store,
             origin_client=origin_client,
             node_id=node_id,
             consistency_manager=consistency_manager,
+            peer_client=peer_client,
         )
         self.start_time = time.time()
 
@@ -146,12 +190,21 @@ class ProxyServer:
         max_object_size_bytes: int = 5 * 1024 * 1024,
         policy_name: str = "lru",
         consistency_manager: Optional[Any] = None,
+        peer_client: Optional[Any] = None,
+        peers: Optional[list[str]] = None,
     ):
         self.host = host
         self.port = port
         self.origin_url = origin_url
         self.node_id = node_id
         self.consistency_manager = consistency_manager
+
+        if peer_client is not None:
+            self.peer_client = peer_client
+        elif peers and PeerClient is not None:
+            self.peer_client = PeerClient(requester_node_id=node_id, peer_urls=peers)
+        else:
+            self.peer_client = None
 
         # Initialize policy
         if policy_name.lower() == "adaptive":
@@ -175,6 +228,7 @@ class ProxyServer:
             origin_client=self.origin_client,
             node_id=self.node_id,
             consistency_manager=self.consistency_manager,
+            peer_client=self.peer_client,
         )
         self.port = self.server.server_port
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)

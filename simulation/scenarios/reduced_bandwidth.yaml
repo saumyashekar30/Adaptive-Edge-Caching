@@ -1,0 +1,21 @@
+scenario_name: "reduced_bandwidth"
+description: "Simulates constrained edge access bottleneck by throttling link capacity down to 1 Mbps"
+
+topology:
+  nodes:
+    controller: { ip: "10.0.0.1", port: 8000 }
+    edge_node_1: { ip: "10.0.1.10", port: 8081, bandwidth_mbps: 100, delay_ms: 10.0, loss_pct: 0.0 }
+    edge_node_2: { ip: "10.0.2.10", port: 8082, bandwidth_mbps: 1, delay_ms: 15.0, loss_pct: 0.5 }  # Throttled link
+    edge_node_3: { ip: "10.0.3.10", port: 8083, bandwidth_mbps: 100, delay_ms: 15.0, loss_pct: 0.0 }
+    origin: { ip: "10.0.100.1", port: 8000, latency_ms: 60.0 }
+
+routing_weights:
+  alpha: 0.35
+  beta: 0.25
+  gamma: 0.30  # High utilization penalized
+  delta: 0.10
+
+workload:
+  duration_seconds: 60
+  request_rate_rps: 80
+  cache_hit_ratio_expected: 0.85

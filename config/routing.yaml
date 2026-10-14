@@ -1,0 +1,20 @@
+# Traffic Routing Weights & Edge Node Selection Configuration
+# Formula: Score = alpha * Latency + beta * PacketLoss + gamma * Utilization + delta * QueueingDelay
+weights:
+  alpha: 0.40  # Latency (ms) weight
+  beta: 0.30   # Packet loss (%) weight
+  gamma: 0.20  # Utilization (%) weight
+  delta: 0.10  # Queueing delay (ms) weight
+
+# Selection settings
+selection:
+  algorithm: "weighted_penalty"
+  tie_breaker: "utilization"
+  fallback_enabled: true
+
+# Health probe and heartbeat settings
+health:
+  probe_interval_seconds: 1.0
+  probe_timeout_seconds: 0.8
+  failure_threshold: 2
+  recovery_threshold: 2

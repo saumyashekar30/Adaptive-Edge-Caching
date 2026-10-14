@@ -1,0 +1,172 @@
+! ==============================================================================
+! CISCO IOS DEVICE CONFIGURATIONS FOR ADAPTIVE EDGE CACHING
+! Author: Saumya Shekhar (Modules 5, 6, 8, 9)
+! Target: Cisco Packet Tracer 8.x (Cisco 4331 Routers, Catalyst 2960 Switches)
+! ==============================================================================
+
+! ------------------------------------------------------------------------------
+! 1. EDGE ROUTER (R1) CONFIGURATION
+! ------------------------------------------------------------------------------
+hostname R1-Edge-Router
+!
+no ip domain-lookup
+ip routing
+!
+! Client LAN Interface
+interface GigabitEthernet0/0/0
+ description Connection to SW-Client (Client LAN)
+ ip address 10.0.0.1 255.255.255.0
+ no shutdown
+!
+! WAN Transit Interface to Core Origin Router (R2)
+interface GigabitEthernet0/0/1
+ description WAN Link to R2-Origin-Router
+ ip address 10.0.10.1 255.255.255.252
+ bandwidth 100000
+ delay 500
+ no shutdown
+!
+! Physical Trunk Link to Edge Cluster Switch (SW-Edge)
+interface GigabitEthernet0/0/2
+ description 802.1Q Trunk Link to SW-Edge
+ no ip address
+ no shutdown
+!
+! Subinterface for Edge Node 1 (VLAN 10)
+interface GigabitEthernet0/0/2.10
+ description Edge Node 1 Gateway
+ encapsulation dot1Q 10
+ ip address 10.0.1.1 255.255.255.0
+ no shutdown
+!
+! Subinterface for Edge Node 2 (VLAN 20)
+interface GigabitEthernet0/0/2.20
+ description Edge Node 2 Gateway
+ encapsulation dot1Q 20
+ ip address 10.0.2.1 255.255.255.0
+ no shutdown
+!
+! Subinterface for Edge Node 3 (VLAN 30)
+interface GigabitEthernet0/0/2.30
+ description Edge Node 3 Gateway
+ encapsulation dot1Q 30
+ ip address 10.0.3.1 255.255.255.0
+ no shutdown
+!
+! OSPF Dynamic Routing Configuration
+router ospf 1
+ router-id 1.1.1.1
+ passive-interface GigabitEthernet0/0/0
+ passive-interface GigabitEthernet0/0/2.10
+ passive-interface GigabitEthernet0/0/2.20
+ passive-interface GigabitEthernet0/0/2.30
+ network 10.0.0.0 0.0.0.255 area 0
+ network 10.0.1.0 0.0.0.255 area 0
+ network 10.0.2.0 0.0.0.255 area 0
+ network 10.0.3.0 0.0.0.255 area 0
+ network 10.0.10.0 0.0.0.3 area 0
+!
+! Access Control List for Policy-Based Traffic Steering / Telemetry
+ip access-list extended ACL_EDGE_TELEMETRY
+ permit tcp any 10.0.1.0 0.0.0.255 eq 8081
+ permit tcp any 10.0.2.0 0.0.0.255 eq 8082
+ permit tcp any 10.0.3.0 0.0.0.255 eq 8083
+ permit tcp any host 10.0.100.10 eq 8000
+!
+end
+
+
+! ------------------------------------------------------------------------------
+! 2. CORE ORIGIN ROUTER (R2) CONFIGURATION
+! ------------------------------------------------------------------------------
+hostname R2-Core-Origin
+!
+no ip domain-lookup
+ip routing
+!
+interface GigabitEthernet0/0/0
+ description WAN Link to R1-Edge-Router
+ ip address 10.0.10.2 255.255.255.252
+ bandwidth 100000
+ delay 5000
+ no shutdown
+!
+interface GigabitEthernet0/0/1
+ description Authoritative Data Center Origin LAN
+ ip address 10.0.100.1 255.255.255.0
+ no shutdown
+!
+router ospf 1
+ router-id 2.2.2.2
+ passive-interface GigabitEthernet0/0/1
+ network 10.0.10.0 0.0.0.3 area 0
+ network 10.0.100.0 0.0.0.255 area 0
+!
+end
+
+
+! ------------------------------------------------------------------------------
+! 3. EDGE CLUSTER SWITCH (SW-Edge) CONFIGURATION
+! ------------------------------------------------------------------------------
+hostname SW-Edge
+!
+vlan 10
+ name EDGE_NODE_1
+vlan 20
+ name EDGE_NODE_2
+vlan 30
+ name EDGE_NODE_3
+!
+interface GigabitEthernet0/1
+ description 802.1Q Trunk Uplink to R1 G0/0/2
+ switchport mode trunk
+ switchport trunk allowed vlan 10,20,30
+ no shutdown
+!
+interface FastEthernet0/1
+ description Edge Node 1 Server Access Port
+ switchport mode access
+ switchport access vlan 10
+ spanning-tree portfast
+ no shutdown
+!
+interface FastEthernet0/2
+ description Edge Node 2 Server Access Port
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ no shutdown
+!
+interface FastEthernet0/3
+ description Edge Node 3 Server Access Port
+ switchport mode access
+ switchport access vlan 30
+ spanning-tree portfast
+ no shutdown
+!
+end
+
+
+! ------------------------------------------------------------------------------
+! 4. CLIENT SWITCH (SW-Client) CONFIGURATION
+! ------------------------------------------------------------------------------
+hostname SW-Client
+!
+interface GigabitEthernet0/1
+ description Uplink to R1 G0/0/0
+ switchport mode access
+ no shutdown
+!
+interface FastEthernet0/1
+ description Client PC-1
+ switchport mode access
+ spanning-tree portfast
+ no shutdown
+!
+interface FastEthernet0/2
+ description Client PC-2
+ switchport mode access
+ spanning-tree portfast
+ no shutdown
+!
+end

@@ -1,0 +1,29 @@
+scenario_name: "node_failure"
+description: "Simulates edge node 2 process crash/power-loss at T=10s, heartbeat failure detection, rerouting, and recovery at T=30s"
+
+topology:
+  nodes:
+    controller: { ip: "10.0.0.1", port: 8000 }
+    edge_node_1: { ip: "10.0.1.10", port: 8081, bandwidth_mbps: 100, delay_ms: 10.0, loss_pct: 0.0 }
+    edge_node_2: { ip: "10.0.2.10", port: 8082, bandwidth_mbps: 100, delay_ms: 8.0, loss_pct: 0.0 }
+    edge_node_3: { ip: "10.0.3.10", port: 8083, bandwidth_mbps: 100, delay_ms: 15.0, loss_pct: 0.0 }
+    origin: { ip: "10.0.100.1", port: 8000, latency_ms: 60.0 }
+
+events:
+  - { type: "node_crash", target: "edge_node_2", timestamp_s: 10.0 }
+  - { type: "node_recover", target: "edge_node_2", timestamp_s: 30.0 }
+
+routing_weights:
+  alpha: 0.40
+  beta: 0.30
+  gamma: 0.20
+  delta: 0.10
+
+heartbeat:
+  interval_seconds: 1.0
+  failure_threshold: 2
+  recovery_threshold: 2
+
+workload:
+  duration_seconds: 60
+  request_rate_rps: 120
