@@ -1,0 +1,21 @@
+scenario_name: "congestion"
+description: "Simulates buffer queue build-up and packet drops from bursty cross-traffic on Node 1"
+
+topology:
+  nodes:
+    controller: { ip: "10.0.0.1", port: 8000 }
+    edge_node_1: { ip: "10.0.1.10", port: 8081, bandwidth_mbps: 10, delay_ms: 10.0, queue_size_pkts: 20, loss_pct: 3.5, queueing_delay_ms: 45.0 }
+    edge_node_2: { ip: "10.0.2.10", port: 8082, bandwidth_mbps: 50, delay_ms: 12.0, queue_size_pkts: 100, loss_pct: 0.1, queueing_delay_ms: 2.0 }
+    edge_node_3: { ip: "10.0.3.10", port: 8083, bandwidth_mbps: 50, delay_ms: 15.0, queue_size_pkts: 100, loss_pct: 0.1, queueing_delay_ms: 3.0 }
+    origin: { ip: "10.0.100.1", port: 8000, latency_ms: 60.0 }
+
+routing_weights:
+  alpha: 0.20
+  beta: 0.20
+  gamma: 0.25
+  delta: 0.35  # Queueing delay heavily penalized
+
+workload:
+  duration_seconds: 60
+  request_rate_rps: 150
+  cross_traffic_burst_mbps: 45.0

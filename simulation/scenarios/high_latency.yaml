@@ -1,0 +1,21 @@
+scenario_name: "high_latency"
+description: "WAN propagation delay injected on links to evaluate latency penalty and dynamic traffic shifting"
+
+topology:
+  nodes:
+    controller: { ip: "10.0.0.1", port: 8000 }
+    edge_node_1: { ip: "10.0.1.10", port: 8081, bandwidth_mbps: 100, delay_ms: 10.0, loss_pct: 0.0 }
+    edge_node_2: { ip: "10.0.2.10", port: 8082, bandwidth_mbps: 100, delay_ms: 25.0, loss_pct: 0.0 }
+    edge_node_3: { ip: "10.0.3.10", port: 8083, bandwidth_mbps: 100, delay_ms: 180.0, loss_pct: 0.2 }  # High latency WAN link
+    origin: { ip: "10.0.100.1", port: 8000, latency_ms: 120.0 }
+
+routing_weights:
+  alpha: 0.60  # Latency heavily prioritized
+  beta: 0.20
+  gamma: 0.15
+  delta: 0.05
+
+workload:
+  duration_seconds: 60
+  request_rate_rps: 100
+  cache_hit_ratio_expected: 0.80

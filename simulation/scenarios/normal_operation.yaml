@@ -1,0 +1,23 @@
+scenario_name: "normal_operation"
+description: "Baseline scenario with nominal link capacities, low latency, and zero artificial loss"
+
+topology:
+  nodes:
+    controller: { ip: "10.0.0.1", port: 8000 }
+    edge_node_1: { ip: "10.0.1.10", port: 8081, capacity_mb: 50, bandwidth_mbps: 100, delay_ms: 5.0, loss_pct: 0.0 }
+    edge_node_2: { ip: "10.0.2.10", port: 8082, capacity_mb: 50, bandwidth_mbps: 100, delay_ms: 8.0, loss_pct: 0.0 }
+    edge_node_3: { ip: "10.0.3.10", port: 8083, capacity_mb: 50, bandwidth_mbps: 100, delay_ms: 12.0, loss_pct: 0.0 }
+    origin: { ip: "10.0.100.1", port: 8000, latency_ms: 60.0 }
+  
+routing_weights:
+  alpha: 0.40  # Latency
+  beta: 0.30   # Packet loss
+  gamma: 0.20  # Utilization
+  delta: 0.10  # Queueing delay
+
+workload:
+  duration_seconds: 60
+  request_rate_rps: 120
+  zipf_alpha: 1.1
+  unique_objects: 500
+  cache_hit_ratio_expected: 0.82

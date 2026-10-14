@@ -1,0 +1,27 @@
+{
+  "topology_name": "adaptive_edge_caching_cluster",
+  "version": "1.0",
+  "author": "Saumya Shekhar",
+  "description": "Cisco Packet Tracer 8.x schema definition for 3-node edge cache cluster",
+  "subnets": [
+    { "name": "Client_LAN", "prefix": "10.0.0.0/24", "gateway": "10.0.0.1", "vlan": 1 },
+    { "name": "Edge_Node_1_VLAN", "prefix": "10.0.1.0/24", "gateway": "10.0.1.1", "vlan": 10 },
+    { "name": "Edge_Node_2_VLAN", "prefix": "10.0.2.0/24", "gateway": "10.0.2.1", "vlan": 20 },
+    { "name": "Edge_Node_3_VLAN", "prefix": "10.0.3.0/24", "gateway": "10.0.3.1", "vlan": 30 },
+    { "name": "WAN_Transit", "prefix": "10.0.10.0/30", "r1_ip": "10.0.10.1", "r2_ip": "10.0.10.2" },
+    { "name": "Origin_LAN", "prefix": "10.0.100.0/24", "gateway": "10.0.100.1", "vlan": 1 }
+  ],
+  "devices": [
+    { "name": "R1-Edge-Router", "type": "Cisco 4331", "role": "Traffic Controller & Inter-VLAN Gateway" },
+    { "name": "R2-Core-Origin", "type": "Cisco 4331", "role": "Origin Gateway & OSPF Peer" },
+    { "name": "SW-Edge", "type": "Catalyst 2960", "role": "802.1Q Trunk & Access Switch for Edge Cluster" },
+    { "name": "SW-Client", "type": "Catalyst 2960", "role": "Access Switch for Client Subnet" },
+    { "name": "SW-Origin", "type": "Catalyst 2960", "role": "Access Switch for Origin LAN" },
+    { "name": "Edge-Node-1", "type": "Server", "ip": "10.0.1.10", "port": 8081, "vlan": 10 },
+    { "name": "Edge-Node-2", "type": "Server", "ip": "10.0.2.10", "port": 8082, "vlan": 20 },
+    { "name": "Edge-Node-3", "type": "Server", "ip": "10.0.3.10", "port": 8083, "vlan": 30 },
+    { "name": "Origin-Server", "type": "Server", "ip": "10.0.100.10", "port": 8000 },
+    { "name": "PC-1", "type": "PC", "ip": "10.0.0.10" },
+    { "name": "PC-2", "type": "PC", "ip": "10.0.0.11" }
+  ]
+}

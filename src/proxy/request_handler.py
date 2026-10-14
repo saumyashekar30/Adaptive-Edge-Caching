@@ -28,11 +28,13 @@ class ProxyRequestHandler:
         origin_client: OriginClient,
         node_id: str = "edge-node-1",
         consistency_manager: Optional[Any] = None,
+        peer_client: Optional[Any] = None,
     ) -> None:
         self.cache = cache_store
         self.origin_client = origin_client
         self.node_id = node_id
         self.consistency = consistency_manager
+        self.peer_client = peer_client
 
     def normalize_cache_key(self, path: str, query: Dict[str, list[str]]) -> str:
         """Derive a canonical cache key from request path and query parameters."""
@@ -103,8 +105,41 @@ class ProxyRequestHandler:
 
             return 200, resp_headers, cached_entry.value
 
-        # 3. Handle MISS (or EXPIRED) -> Forward to Origin
-        logger.debug("Cache %s for key '%s' -> Forwarding to origin", lookup_res.status, cache_key)
+        # 3. Handle MISS (or EXPIRED) -> Check peers first, then Origin
+        logger.debug("Cache %s for key '%s' -> Checking peers/origin", lookup_res.status, cache_key)
+
+        # Peer-to-Peer cache query (Shared Seam: api_contracts.md Section 5)
+        if self.peer_client is not None:
+            peer_res = self.peer_client.fetch_from_peers(path)
+            if peer_res is not None:
+                peer_body, peer_headers = peer_res
+                content_type = peer_headers.get("Content-Type", "application/octet-stream")
+                version = peer_headers.get("X-Resource-Version", "1.0")
+                etag = peer_headers.get("ETag", "")
+                self.cache.put(
+                    key=cache_key,
+                    value=peer_body,
+                    content_type=content_type,
+                    version=version,
+                    etag=etag,
+                    origin_latency_ms=10.0,
+                )
+                total_time_ms = (time.perf_counter() - start_time) * 1000.0
+                resp_headers = {
+                    "Content-Type": content_type,
+                    "Content-Length": str(len(peer_body)),
+                    "X-Cache": "PEER_HIT",
+                    "X-Edge-Node-Id": self.node_id,
+                    "X-Peer-Cache": "HIT",
+                    "X-Peer-Node-Id": peer_headers.get("X-Peer-Node-Id", "peer-edge"),
+                    "X-Cache-Lookup-Time-Ms": f"{lookup_ms:.2f}",
+                    "X-Response-Time-Ms": f"{total_time_ms:.2f}",
+                    "X-Resource-Version": version,
+                }
+                if etag:
+                    resp_headers["ETag"] = etag
+                return 200, resp_headers, peer_body
+
         origin_resp = self.origin_client.fetch(path=path, headers=headers, query_params={k: v[0] for k, v in query.items()})
 
         total_time_ms = (time.perf_counter() - start_time) * 1000.0

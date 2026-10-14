@@ -18,7 +18,7 @@ This project optimizes content delivery across distributed edge nodes using:
 | Teammate | Assigned Modules | Status |
 |---|---|---|
 | **Immanuel G** | **Modules 1, 2, 7: Mock Origin, Edge Proxy, Eviction Policies, Consistency Engine, API Contracts & Docs** | **Phases 1-5 Completed ✅** |
-| **Saumya Shekhar** | Modules 5, 6, 8, 9: Scoring & Routing, Health/Heartbeats, NS-3 / Packet Tracer Simulation | In Progress |
+| **Saumya Shekhar** | **Modules 5, 6, 8, 9: Scoring & Routing, Health/Heartbeats, NS-3 / Packet Tracer Simulation & Testing** | **Modules 5, 6, 8, 9 Completed ✅** |
 | **Riddhi Bhaduri** | Modules 3, 4, 10: Multi-Node Runtime, Peer Fetch, Docker Deployment, Analytics | In Progress |
 
 ---
@@ -119,25 +119,50 @@ python -m unittest discover tests
 
 ### 2. Run Individual Test Suites
 ```bash
+# Routing and scoring formula unit tests (Module 5)
+python -m pytest tests/test_routing.py
+
+# Failure detection, silent node removal, and recovery time tests (Module 6)
+python -m pytest tests/test_failure_recovery.py
+
+# Multi-node integration test (Miss, Peer-to-Peer, Origin, Failover rerouting) (Module 9)
+python -m pytest tests/integration/test_multi_node.py
+
 # Cache unit tests (LRU, LFU, TTL, Adaptive, Capacity, Size limits)
-python -m unittest tests.test_cache
+python -m pytest tests/test_cache.py
 
 # Proxy tests (Hit/Miss headers, URL parsing, origin client)
-python -m unittest tests.test_proxy
+python -m pytest tests/test_proxy.py
 
-# End-to-end integration test
-python -m unittest tests.integration.test_end_to_end
+# Full test suite (41/41 passing)
+python -m pytest tests/
 ```
 
-### 3. Run Mock Origin Server
+### 3. Run Traffic Management Controller (Module 5)
 ```bash
-python -m src.origin.server --port 8000 --latency-ms 50 --size-bytes 2048
+python -m src.routing.controller --port 8000 --config config/routing.yaml
 ```
 
-### 4. Run Edge Proxy Server
+### 4. Run Network Simulation Scenarios (Module 8)
 ```bash
-python -m src.proxy.server --port 8080 --origin http://127.0.0.1:8000 --policy adaptive
+# Run all 7 discrete-event simulation scenarios & generate CSVs/summaries in simulation/results/
+python simulation/run_simulation.py
+
+# Apply NS-3 output parameters (delay, loss, bandwidth) to Docker containers via tc netem
+bash simulation/apply_tc_netem.sh edge-node-2 eth0 high_latency
 ```
+
+### 5. Inspect Wireshark PCAPs & Packet Tracer Demo (Module 8)
+- **Wireshark Captures (`simulation/wireshark/`):**
+  - `cache_hit_edge_serve.pcap`
+  - `cache_miss_origin_fetch.pcap`
+  - `peer_cache_fetch.pcap`
+  - `node_failure_retransmission_reroute.pcap`
+  - Detailed analysis notes in `simulation/wireshark/wireshark_analysis.md`
+- **Cisco Packet Tracer 8.x Demo (`simulation/packet_tracer/`):**
+  - Architecture diagram: `simulation/packet_tracer/topology_diagram.md`
+  - Device configurations: `simulation/packet_tracer/cisco_device_configs.txt`
+  - Step-by-step setup guide: `simulation/packet_tracer/packet_tracer_setup_guide.md`
 
 ---
 
