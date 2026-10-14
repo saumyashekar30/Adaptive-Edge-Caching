@@ -1,7 +1,15 @@
-name: "adaptive"
-description: "Adaptive Cache Replacement Policy based on recency, frequency, and latency cost"
-params:
-  recency_weight: 0.4
-  frequency_weight: 0.4
-  latency_weight: 0.2
-  adaptation_window_seconds: 120
+# Adaptive Edge Caching Policy Configuration
+# Utility Score: U(o) = w_f * f + w_r * r + w_l * L + w_b * B - (w_s + w_c * pressure) * S
+policy: adaptive
+weights:
+  frequency: 0.25      # Importance of hit count (f)
+  recency: 0.25        # Importance of recent access (r)
+  origin_latency: 0.20 # Benefit of saving slow origin RTT (L)
+  bandwidth_cost: 0.10 # Value of saving transit bandwidth (B)
+  size: 0.10           # Penalty for large memory footprint (S)
+  capacity_pressure: 0.10 # Dynamic penalty scaling as cache fills up (C)
+
+parameters:
+  min_utility_threshold: 0.0
+  normalize_candidates: true
+  decay_halflife_seconds: 3600

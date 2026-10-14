@@ -1,1 +1,1 @@
-"""Telemetry, metrics collection, and health checks."""
+"""Telemetry and health monitoring package."""

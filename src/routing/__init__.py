@@ -1,1 +1,1 @@
-"""Centralized and distributed routing controllers."""
+"""Routing and traffic management package."""
