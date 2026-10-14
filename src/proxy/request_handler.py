@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 try:
@@ -29,12 +29,19 @@ class ProxyRequestHandler:
         node_id: str = "edge-node-1",
         consistency_manager: Optional[Any] = None,
         peer_client: Optional[Any] = None,
+        stats_hook: Optional[Callable[[str, float], None]] = None,
     ) -> None:
         self.cache = cache_store
         self.origin_client = origin_client
         self.node_id = node_id
         self.consistency = consistency_manager
         self.peer_client = peer_client
+        # Optional observer invoked as stats_hook(outcome, latency_ms) on every
+        # terminal request outcome ("HIT"/"PEER_HIT"/"MISS"/"BYPASS"/"ERROR").
+        # Added so src/edge/node.py can derive real local/peer/origin telemetry
+        # counters without re-parsing response headers or duplicating this
+        # control flow. Defaults to a no-op; existing callers are unaffected.
+        self.stats_hook = stats_hook or (lambda outcome, latency_ms: None)
 
     def normalize_cache_key(self, path: str, query: Dict[str, list[str]]) -> str:
         """Derive a canonical cache key from request path and query parameters."""
@@ -103,6 +110,7 @@ class ProxyRequestHandler:
             if cached_entry.etag:
                 resp_headers["ETag"] = cached_entry.etag
 
+            self.stats_hook("HIT", (time.perf_counter() - start_time) * 1000.0)
             return 200, resp_headers, cached_entry.value
 
         # 3. Handle MISS (or EXPIRED) -> Check peers first, then Origin
@@ -138,6 +146,7 @@ class ProxyRequestHandler:
                 }
                 if etag:
                     resp_headers["ETag"] = etag
+                self.stats_hook("PEER_HIT", total_time_ms)
                 return 200, resp_headers, peer_body
 
         origin_resp = self.origin_client.fetch(path=path, headers=headers, query_params={k: v[0] for k, v in query.items()})
@@ -180,6 +189,7 @@ class ProxyRequestHandler:
             if origin_resp.etag:
                 resp_headers["ETag"] = origin_resp.etag
 
+            self.stats_hook("MISS", total_time_ms)
             return 200, resp_headers, origin_resp.body
 
         # Error or unexpected status from origin
@@ -190,6 +200,7 @@ class ProxyRequestHandler:
             "X-Edge-Node-Id": self.node_id,
             "X-Response-Time-Ms": f"{total_time_ms:.2f}",
         }
+        self.stats_hook("ERROR", total_time_ms)
         return origin_resp.status_code, resp_headers, origin_resp.body
 
     def _bypass_fetch(
@@ -216,4 +227,5 @@ class ProxyRequestHandler:
         if origin_resp.etag:
             resp_headers["ETag"] = origin_resp.etag
 
+        self.stats_hook("BYPASS", total_time_ms)
         return origin_resp.status_code, resp_headers, origin_resp.body

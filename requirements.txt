@@ -1,6 +1,7 @@
 # Core dependencies
 PyYAML>=6.0.1
 requests>=2.31.0
+psutil>=5.9.0
 
 # Optional simulation and evaluation tools
 numpy>=1.24.0

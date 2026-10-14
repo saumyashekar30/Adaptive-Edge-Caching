@@ -9,18 +9,22 @@ import threading
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 try:
     from ..cache.adaptive import AdaptivePolicy
+    from ..cache.lfu import LFUPolicy
     from ..cache.lru import LRUPolicy
     from ..cache.store import CacheStore
+    from ..cache.ttl import TTLPolicy
     from .origin_client import OriginClient
     from .request_handler import ProxyRequestHandler
 except ImportError:
     from src.cache.adaptive import AdaptivePolicy  # type: ignore
+    from src.cache.lfu import LFUPolicy  # type: ignore
     from src.cache.lru import LRUPolicy  # type: ignore
     from src.cache.store import CacheStore  # type: ignore
+    from src.cache.ttl import TTLPolicy  # type: ignore
     from src.proxy.origin_client import OriginClient  # type: ignore
     from src.proxy.request_handler import ProxyRequestHandler  # type: ignore
 
@@ -160,6 +164,7 @@ class ProxyHTTPServer(ThreadingHTTPServer):
         node_id: str = "edge-node-1",
         consistency_manager: Optional[Any] = None,
         peer_client: Optional[Any] = None,
+        stats_hook: Optional[Callable[[str, float], None]] = None,
     ):
         super().__init__(server_address, ProxyHTTPRequestHandler)
         self.cache_store = cache_store
@@ -173,6 +178,7 @@ class ProxyHTTPServer(ThreadingHTTPServer):
             node_id=node_id,
             consistency_manager=consistency_manager,
             peer_client=peer_client,
+            stats_hook=stats_hook,
         )
         self.start_time = time.time()
 
@@ -192,12 +198,15 @@ class ProxyServer:
         consistency_manager: Optional[Any] = None,
         peer_client: Optional[Any] = None,
         peers: Optional[list[str]] = None,
+        default_ttl_seconds: Optional[float] = None,
+        stats_hook: Optional[Callable[[str, float], None]] = None,
     ):
         self.host = host
         self.port = port
         self.origin_url = origin_url
         self.node_id = node_id
         self.consistency_manager = consistency_manager
+        self.stats_hook = stats_hook
 
         if peer_client is not None:
             self.peer_client = peer_client
@@ -206,9 +215,17 @@ class ProxyServer:
         else:
             self.peer_client = None
 
-        # Initialize policy
-        if policy_name.lower() == "adaptive":
+        # Initialize policy. Previously only "adaptive" vs. everything-else->LRU
+        # was handled here, so a node config declaring policy: lfu or ttl would
+        # silently be served by LRU instead -- fixed so all 4 documented
+        # policies (docs/architecture.md Sec 2.3) are actually honored.
+        policy_key = policy_name.lower()
+        if policy_key == "adaptive":
             policy = AdaptivePolicy(total_capacity_bytes=cache_capacity_bytes)
+        elif policy_key == "lfu":
+            policy = LFUPolicy()
+        elif policy_key == "ttl":
+            policy = TTLPolicy()
         else:
             policy = LRUPolicy()
 
@@ -216,6 +233,7 @@ class ProxyServer:
             max_capacity_bytes=cache_capacity_bytes,
             max_object_size_bytes=max_object_size_bytes,
             policy=policy,
+            default_ttl_seconds=default_ttl_seconds,
         )
         self.origin_client = OriginClient(origin_base_url=origin_url)
         self.server: Optional[ProxyHTTPServer] = None
@@ -229,6 +247,7 @@ class ProxyServer:
             node_id=self.node_id,
             consistency_manager=self.consistency_manager,
             peer_client=self.peer_client,
+            stats_hook=self.stats_hook,
         )
         self.port = self.server.server_port
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)

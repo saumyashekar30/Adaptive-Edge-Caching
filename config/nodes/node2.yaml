@@ -8,3 +8,5 @@ origin_url: "http://127.0.0.1:8000"
 peers:
   - "http://127.0.0.1:8081"
   - "http://127.0.0.1:8083"
+controller_url: null
+telemetry_interval_seconds: 5

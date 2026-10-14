@@ -11,6 +11,29 @@ services:
     environment:
       - PORT=8000
       - LATENCY_MS=60
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  controller:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.controller
+    container_name: edge-controller
+    ports:
+      - "9000:8000"
+    depends_on:
+      origin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
 
   node1:
     build:
@@ -21,9 +44,25 @@ services:
       - "8081:8080"
     environment:
       - NODE_ID=node1
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=8080
+      - ADVERTISE_HOST=node1
       - ORIGIN_URL=http://origin:8000
+      - POLICY=adaptive
+      - CAPACITY_MB=50
+      - MAX_OBJECT_SIZE_MB=5
+      - PEERS=http://node2:8080,http://node3:8080
+      - CONTROLLER_URL=http://controller:8000
+      - TELEMETRY_INTERVAL_SECONDS=5
     depends_on:
-      - origin
+      origin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
 
   node2:
     build:
@@ -34,9 +73,25 @@ services:
       - "8082:8080"
     environment:
       - NODE_ID=node2
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=8080
+      - ADVERTISE_HOST=node2
       - ORIGIN_URL=http://origin:8000
+      - POLICY=lru
+      - CAPACITY_MB=50
+      - MAX_OBJECT_SIZE_MB=5
+      - PEERS=http://node1:8080,http://node3:8080
+      - CONTROLLER_URL=http://controller:8000
+      - TELEMETRY_INTERVAL_SECONDS=5
     depends_on:
-      - origin
+      origin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
 
   node3:
     build:
@@ -47,6 +102,22 @@ services:
       - "8083:8080"
     environment:
       - NODE_ID=node3
+      - NODE_HOST=0.0.0.0
+      - NODE_PORT=8080
+      - ADVERTISE_HOST=node3
       - ORIGIN_URL=http://origin:8000
+      - POLICY=lfu
+      - CAPACITY_MB=50
+      - MAX_OBJECT_SIZE_MB=5
+      - PEERS=http://node1:8080,http://node2:8080
+      - CONTROLLER_URL=http://controller:8000
+      - TELEMETRY_INTERVAL_SECONDS=5
     depends_on:
-      - origin
+      origin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s

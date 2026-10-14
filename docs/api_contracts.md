@@ -182,3 +182,56 @@ When an edge node misses locally, it queries sibling peer edge nodes before hitt
 #### Status Codes
 - `200 OK`: Peer had object in its local cache; returns payload.
 - `404 Not Found`: Peer did not have object (initiating node then proceeds to origin).
+
+---
+
+## 6. Edge Node → Routing Controller Telemetry Push (Shared Seam: Riddhi's `src/edge/node.py` and Saumya's `src/routing/controller.py`)
+
+Added as part of the Edge Node Runtime work: each `EdgeNode` periodically
+pushes its own telemetry to the routing controller it's configured with
+(`controller_url` in `config/nodes/*.yaml`, or `CONTROLLER_URL` env var),
+rather than the controller polling nodes itself.
+
+### `POST /nodes/register`
+Sent once at node startup (best-effort; a failure here does not stop the node).
+
+#### Request Body (JSON)
+```json
+{ "node_id": "node1", "url": "http://node1:8080" }
+```
+Re-registering an already-known `node_id` overwrites its stored URL (used to
+correct the controller's own config-file-based auto-registration in Docker,
+where `config/nodes/*.yaml` lists `127.0.0.1` addresses not reachable from
+other containers).
+
+### `POST /telemetry`
+Sent every `telemetry_interval_seconds` (default 5s) by `EdgeNodeTelemetry.push_to_controller`.
+
+#### Request Body (JSON) — exact `NodeMetrics` shape (`src/common/models.py`)
+```json
+{
+  "node_id": "node1",
+  "latency_ms": 12.4,
+  "packet_loss_pct": 0.0,
+  "utilization_pct": 8.2,
+  "queueing_delay_ms": 0.62,
+  "hit_ratio": 0.91,
+  "active_connections": 0,
+  "total_requests": 540,
+  "uptime": 183.2,
+  "status": "HEALTHY",
+  "timestamp": 1776123456.78
+}
+```
+Consumed directly by `TrafficManagementController.record_telemetry` /
+`src/routing/scoring.py`. `packet_loss_pct` is always `0.0` from this source
+(not measurable from a stdlib HTTP process without privileged network
+instrumentation) and `queueing_delay_ms` is estimated from measured latency
+-- never fabricated as a non-zero "measured" value; see the per-metric
+documentation in `src/telemetry/metrics.py`.
+
+### `POST /nodes/deregister`
+Sent once on graceful shutdown (`EdgeNode.stop()`), best-effort.
+```json
+{ "node_id": "node1" }
+```
