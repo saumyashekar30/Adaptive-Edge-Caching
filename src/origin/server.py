@@ -65,6 +65,19 @@ class MockOriginHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         logger.debug("%s - - [%s] %s", self.address_string(), self.log_date_time_string(), format % args)
 
+    def end_headers(self) -> None:
+        # Allow a browser-based frontend (e.g. a local Next.js dev server) to
+        # read responses cross-origin. No stdlib http.server handler here
+        # sent CORS headers before, so direct browser fetches were blocked.
+        self.send_header("Access-Control-Allow-Origin", "*")
+        super().end_headers()
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(HTTPStatus.NO_CONTENT)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, If-None-Match, Cache-Control")
+        self.end_headers()
+
     def do_GET(self) -> None:
         parsed_url = urlparse(self.path)
         path = parsed_url.path
