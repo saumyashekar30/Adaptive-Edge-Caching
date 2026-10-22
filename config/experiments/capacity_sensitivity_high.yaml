@@ -1,0 +1,24 @@
+# Cache-capacity sensitivity: high-capacity variant (same workload as baseline.yaml,
+# single variable changed: cache.capacity_mb 2 -> 8).
+experiment_name: "capacity_sensitivity_high"
+duration_seconds: 60
+num_clients: 10
+workload:
+  distribution: "zipf"
+  zipf_alpha: 1.1
+  unique_objects: 500
+  object_size_mean_bytes: 4096
+  object_size_std_bytes: 1024
+
+cache:
+  capacity_mb: 8
+  max_object_size_kb: 64
+  policies:
+    - lru
+    - lfu
+    - ttl
+    - adaptive
+
+origin:
+  base_latency_ms: 60.0
+  jitter_ms: 10.0

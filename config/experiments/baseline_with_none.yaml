@@ -1,0 +1,26 @@
+# Baseline-vs-caching comparison: adds the honest "none" (no-cache) baseline
+# alongside the four real policies, with multiple repetitions for variance.
+experiment_name: "baseline_vs_none"
+repetitions: 3
+duration_seconds: 60
+num_clients: 10
+workload:
+  distribution: "zipf"
+  zipf_alpha: 1.1
+  unique_objects: 500
+  object_size_mean_bytes: 4096
+  object_size_std_bytes: 1024
+
+cache:
+  capacity_mb: 2
+  max_object_size_kb: 64
+  policies:
+    - none
+    - lru
+    - lfu
+    - ttl
+    - adaptive
+
+origin:
+  base_latency_ms: 60.0
+  jitter_ms: 10.0

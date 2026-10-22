@@ -1,0 +1,5 @@
+policy,cache_hit_ratio_mean,cache_hit_ratio_std,mean_latency_ms_mean,mean_latency_ms_std,median_latency_ms_mean,median_latency_ms_std,p95_latency_ms_mean,p95_latency_ms_std,p99_latency_ms_mean,p99_latency_ms_std,throughput_rps_mean,throughput_rps_std,error_rate_mean,error_rate_std,timeout_rate_mean,timeout_rate_std,repetitions,origin_request_reduction_pct
+adaptive,0.672,,21.599,,1.428,,65.136,,67.52,,449.06,,0.0,,0.0,,1,
+lfu,0.67,,21.748,,1.511,,64.651,,69.882,,446.055,,0.0,,0.0,,1,
+lru,0.672,,21.666,,1.449,,64.755,,69.141,,446.257,,0.0,,0.0,,1,
+ttl,0.668,,21.746,,1.314,,64.705,,70.16,,448.801,,0.0,,0.0,,1,
