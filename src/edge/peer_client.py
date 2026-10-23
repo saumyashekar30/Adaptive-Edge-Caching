@@ -33,7 +33,7 @@ class PeerClient:
     def fetch_from_peers(
         self,
         resource_id: str,
-        timeout: float = 1.0,
+        timeout: float = 2.5,
     ) -> Optional[Tuple[bytes, Dict[str, str]]]:
         """Query peers in order for resource_id.
         
