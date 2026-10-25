@@ -152,7 +152,10 @@ def _latency_boxplot(results_dir: Path, policies: List[str], out_path: Path) -> 
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     labels = list(data.keys())
-    ax.boxplot([data[k] for k in labels], labels=labels, showfliers=False)
+    try:
+        ax.boxplot([data[k] for k in labels], tick_labels=labels, showfliers=False)
+    except TypeError:
+        ax.boxplot([data[k] for k in labels], labels=labels, showfliers=False)
     ax.set_title("Per-Request Latency Distribution by Policy")
     ax.set_xlabel("Cache Policy")
     ax.set_ylabel("Client-Observed Latency (ms)")
