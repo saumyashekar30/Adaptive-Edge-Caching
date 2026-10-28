@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 #  Adaptive Edge Caching - Live Demo Script (Part 4)
 #  Run from the Adaptive-Edge-Caching project root:
 #    powershell -ExecutionPolicy Bypass -File demo.ps1
@@ -28,6 +28,8 @@ function Pause-Demo($msg = "Press ENTER to continue...") {
 $demo2_pass = $false
 $demo3_pass = $false
 $demo4_pass = $false
+$demo5_pass = $false
+$demo6_pass = $false
 
 # ============================================================
 Banner "Demo 1 - Verify services are running and nodes are healthy"
@@ -161,7 +163,7 @@ Banner "Demo 3 - PEER_HIT: object cached on Node 1, requested via Node 2"
 #   2. Node 2 does NOT have the object locally (guaranteed by cache invalidation)
 #   3. Node 2's peers list contains Node 1 (config/nodes/node2.yaml)
 
-# ── Step 0: Guarantee Node 1 has the object ──────────────────
+# -- Step 0: Guarantee Node 1 has the object ------------------
 Step "Pre-warming Node 1 cache (guarantees object is present regardless of Demo 2)"
 Info "  GET http://127.0.0.1:8081/data/$RESOURCE"
 try {
@@ -178,7 +180,7 @@ try {
     FAIL "Could not warm Node 1: $_ - PEER_HIT demo may not work"
 }
 
-# ── Step 1: Clear Node 2's cache for this resource (ensure cold cache) ──
+# -- Step 1: Clear Node 2's cache for this resource (ensure cold cache) --
 Write-Host ""
 Step "Clearing Node 2 local cache for this resource (ensure cold cache on Node 2)"
 try {
@@ -190,7 +192,7 @@ try {
     Write-Host "  (Invalidate call failed or not needed - Node 2 may already be cold)" -ForegroundColor DarkGray
 }
 
-# ── Step 2: Verify Node 2 is cold (probe its own /peer-cache/ slot) ──
+# -- Step 2: Verify Node 2 is cold (probe its own /peer-cache/ slot) --
 # NOTE: /peer-cache/<id> returns 404 when the node's LOCAL cache is cold.
 # PS 5.1 throws on 404 so we catch the exception and read the response from it.
 Write-Host ""
@@ -212,13 +214,13 @@ try {
     }
 }
 
-# ── Step 3: THE ACTUAL DEMO - request via Node 2, expect PEER_HIT ──────
+# -- Step 3: THE ACTUAL DEMO - request via Node 2, expect PEER_HIT ------
 Write-Host ""
-Step "Fetch object THROUGH Node 2 — expected: PEER_HIT from Node 1"
+Step "Fetch object THROUGH Node 2 -- expected: PEER_HIT from Node 1"
 Info "  GET http://127.0.0.1:8082/data/$RESOURCE"
 $xCache3 = $null
 
-# Try up to 2 times — the first attempt can miss if the peer_client
+# Try up to 2 times -- the first attempt can miss if the peer_client
 # hits its timeout under load. A 500ms wait lets the connection settle.
 for ($attempt = 1; $attempt -le 2; $attempt++) {
     if ($attempt -eq 2) {
@@ -265,7 +267,7 @@ if ($xCache3 -eq "PEER_HIT") {
     Write-Host "[WARN] Unexpected X-Cache value: $xCache3" -ForegroundColor Yellow
 }
 
-# ── Step 4: Confirm Node 1 still holds the object ───────────────────────
+# -- Step 4: Confirm Node 1 still holds the object -----------------------
 Write-Host ""
 Info "Verify Node 1 still holds the object in its peer-cache slot:"
 Info "  GET http://127.0.0.1:8081/peer-cache/$RESOURCE"
@@ -359,6 +361,125 @@ if ($null -eq $ctrl) {
     }
 }
 
+if ($demo4_pass) {
+    Pause-Demo "[ Demo 4 PASSED. Press ENTER for Demo 5 - Cache Invalidation ]"
+} else {
+    Pause-Demo "[ Demo 4 finished. Press ENTER for Demo 5 - Cache Invalidation ]"
+}
+
+# ============================================================
+Banner "Demo 5 - Cache Invalidation & Consistency Management"
+# ============================================================
+
+Step "5a - Verify Node 1 currently serves cached content (expected: HIT)"
+Info "  GET http://127.0.0.1:8081/data/$RESOURCE"
+try {
+    $r5a = Invoke-WebRequest -Uri "http://127.0.0.1:8081/data/$RESOURCE" -UseBasicParsing -TimeoutSec 5
+    $c5a = $r5a.Headers["X-Cache"]
+    Write-Host "  Before Invalidation: X-Cache = $c5a" -ForegroundColor $(if ($c5a -eq "HIT") {"Green"} else {"Yellow"})
+} catch {
+    FAIL "Request to Node 1 failed: $_"
+}
+
+Write-Host ""
+Step "5b - Broadcast Cache Invalidation for '$RESOURCE' across Edge Cluster"
+$invJson = @{ key = "/data/$RESOURCE" } | ConvertTo-Json -Compress
+$invBody = [System.Text.Encoding]::UTF8.GetBytes($invJson)
+foreach ($p in @(8081, 8082, 8083)) {
+    try {
+        $invRes = Invoke-RestMethod -Uri "http://127.0.0.1:$p/cache/invalidate" `
+            -Method Post -Body $invBody -ContentType "application/json" -TimeoutSec 3
+        OK "Node on port $p invalidated: status=$($invRes.status), success=$($invRes.success)"
+    } catch {
+        Write-Host "  (Port $p invalidate skipped: $_)" -ForegroundColor DarkGray
+    }
+}
+
+Write-Host ""
+Step "5c - Request resource again on Node 1 (expected: MISS -> re-fetched fresh from Origin)"
+Info "  GET http://127.0.0.1:8081/data/$RESOURCE"
+try {
+    $r5c = Invoke-WebRequest -Uri "http://127.0.0.1:8081/data/$RESOURCE" -UseBasicParsing -TimeoutSec 5
+    $c5c = $r5c.Headers["X-Cache"]
+    $ver5c = $r5c.Headers["X-Resource-Version"]
+    Write-Host "  After Invalidation : X-Cache = $c5c (Version: $ver5c)" -ForegroundColor $(if ($c5c -eq "MISS") {"Green"} else {"Red"})
+    if ($c5c -eq "MISS") {
+        OK "Cache Consistency verified: stale entry purged, fresh origin fetch triggered"
+        $demo5_pass = $true
+    } else {
+        FAIL "Expected MISS after invalidation but got $c5c"
+    }
+} catch {
+    FAIL "Post-invalidation request failed: $_"
+}
+
+if ($demo5_pass) {
+    Pause-Demo "[ Demo 5 PASSED. Press ENTER for Demo 6 - Node Failover ]"
+} else {
+    Pause-Demo "[ Demo 5 finished. Press ENTER for Demo 6 - Node Failover ]"
+}
+
+# ============================================================
+Banner "Demo 6 - Dynamic Node Failover and Fault-Tolerant Routing"
+# ============================================================
+
+Step "6a - Check current node selected by Controller"
+$initialSelected = $null
+try {
+    $r6a = Invoke-WebRequest -Uri "http://127.0.0.1:9000/data/$RESOURCE" -UseBasicParsing -TimeoutSec 5
+    $initialSelected = $r6a.Headers["X-Selected-Node"]
+    OK "Controller currently routing to: $initialSelected"
+} catch {
+    FAIL "Initial route request failed: $_"
+}
+
+$targetFailNode = if ($initialSelected) { $initialSelected } else { "node2" }
+
+Write-Host ""
+Step "6b - Simulate failure / deregistration of active node: $targetFailNode"
+Info "  POST http://127.0.0.1:9000/nodes/deregister"
+try {
+    $deregJson = @{ node_id = $targetFailNode } | ConvertTo-Json -Compress
+    $deregBody = [System.Text.Encoding]::UTF8.GetBytes($deregJson)
+    $deregRes = Invoke-RestMethod -Uri "http://127.0.0.1:9000/nodes/deregister" `
+        -Method Post -Body $deregBody -ContentType "application/json" -TimeoutSec 3
+    OK "Node '$targetFailNode' removed from controller routing table: status=$($deregRes.status)"
+} catch {
+    FAIL "Deregistration failed: $_"
+}
+
+Write-Host ""
+Step "6c - Send client request through Controller -- verify automatic failover"
+Info "  GET http://127.0.0.1:9000/data/$RESOURCE"
+try {
+    $r6c = Invoke-WebRequest -Uri "http://127.0.0.1:9000/data/$RESOURCE" -UseBasicParsing -TimeoutSec 5
+    $newSelected = $r6c.Headers["X-Selected-Node"]
+    $newScore    = $r6c.Headers["X-Node-Score"]
+    Write-Host "  HTTP $($r6c.StatusCode) | X-Selected-Node: $newSelected | X-Node-Score: $newScore" -ForegroundColor Green
+    if ($newSelected -ne $targetFailNode -and $null -ne $newSelected) {
+        OK "Automatic Failover PASSED: traffic seamlessly rerouted from $targetFailNode to $newSelected"
+        $demo6_pass = $true
+    } else {
+        FAIL "Failover failed: traffic still routed to $newSelected"
+    }
+} catch {
+    FAIL "Failover request failed: $_"
+}
+
+Write-Host ""
+Step "6d - Restore cluster health: re-register $targetFailNode"
+try {
+    $portMap = @{"node1"="8081"; "node2"="8082"; "node3"="8083"}
+    $targetPort = if ($portMap.ContainsKey($targetFailNode)) { $portMap[$targetFailNode] } else { "8082" }
+    $regJson = @{ node_id = $targetFailNode; url = "http://127.0.0.1:$targetPort" } | ConvertTo-Json -Compress
+    $regBody = [System.Text.Encoding]::UTF8.GetBytes($regJson)
+    $regRes = Invoke-RestMethod -Uri "http://127.0.0.1:9000/nodes/register" `
+        -Method Post -Body $regBody -ContentType "application/json" -TimeoutSec 3
+    OK "Restored '$targetFailNode' to cluster: status=$($regRes.status)"
+} catch {
+    Write-Host "  (Could not re-register node: $_)" -ForegroundColor DarkGray
+}
+
 # ============================================================
 Banner "Demo Results"
 # ============================================================
@@ -368,12 +489,16 @@ $d2col = if ($demo2_pass) { "Green" } else { "Red" }; $d2sym = if ($demo2_pass) 
 $d3col = if ($demo3_pass) { "Green" } else { "Red" }; $d3sym = if ($demo3_pass) { "PASS" } else { "FAIL" }
 $d4col = if ($demo4_pass) { "Green" } else { if ($null -eq $ctrl) { "Yellow" } else { "Red" } }
 $d4sym = if ($demo4_pass) { "PASS" } else { if ($null -eq $ctrl) { "SKIP" } else { "FAIL" } }
+$d5col = if ($demo5_pass) { "Green" } else { "Red" }; $d5sym = if ($demo5_pass) { "PASS" } else { "FAIL" }
+$d6col = if ($demo6_pass) { "Green" } else { "Red" }; $d6sym = if ($demo6_pass) { "PASS" } else { "FAIL" }
 
 Write-Host ""
 Write-Host "  Demo 1  [$d1sym]  All services healthy" -ForegroundColor $d1col
 Write-Host "  Demo 2  [$d2sym]  MISS -> HIT (same resource, same edge node)" -ForegroundColor $d2col
 Write-Host "  Demo 3  [$d3sym]  PEER_HIT (Node 1 cache served via Node 2 peer fetch)" -ForegroundColor $d3col
 Write-Host "  Demo 4  [$d4sym]  Controller routing with X-Selected-Node and X-Node-Score" -ForegroundColor $d4col
+Write-Host "  Demo 5  [$d5sym]  Cache Invalidation and Freshness (MISS on stale purge)" -ForegroundColor $d5col
+Write-Host "  Demo 6  [$d6sym]  Dynamic Failover (traffic rerouted around offline node)" -ForegroundColor $d6col
 Write-Host ""
 Write-Host "  Resource used this run: $RESOURCE" -ForegroundColor DarkGray
 Write-Host ""
